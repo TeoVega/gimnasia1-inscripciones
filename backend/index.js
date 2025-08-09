@@ -1,100 +1,134 @@
-const express = require('express');
-const cors = require('cors');
-const XLSX = require('xlsx');
-const bodyParser = require('body-parser');
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+import fs from 'fs/promises';
+
+dotenv.config();
+
+const PORT = process.env.PORT || 4000;
+const DB_PATH = process.env.DB_PATH || './db.sqlite';
 
 const app = express();
-const port = process.env.PORT || 4000;
-
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-let inscriptionEnabled = true;
+// Inicializa la base de datos
+let db;
+async function initDb() {
+  db = await open({
+    filename: DB_PATH,
+    driver: sqlite3.Database,
+  });
 
-const GROUPS = [
-  { id: 1, name: 'Masivo 1', horario: 'Lunes 10:15 a 12:00' },
-  { id: 2, name: 'Masivo 2', horario: 'Lunes 12:00 a 13:45' },
-  { id: 3, name: 'Masivo 3', horario: 'Viernes 16:30 a 18:15' },
-  { id: 4, name: 'Masivo 4', horario: 'Miércoles 18:00 a 19:45' },
-];
-const MAX_CUPO = 120;
+  // Ejecuta el schema
+  const schema = await fs.readFile('./schema.sql', 'utf-8');
+  await db.exec(schema);
+}
+initDb();
 
-let inscritos = { 1: [], 2: [], 3: [], 4: [] };
+// Endpoints
 
-// Inscripción de estudiante
-app.post('/api/inscribir', (req, res) => {
-  if (!inscriptionEnabled)
-    return res.status(403).json({ error: 'Inscripción deshabilitada' });
+// GET /api/configuracion
+app.get('/api/configuracion', async (req, res) => {
+  const row = await db.get('SELECT inscripciones_habilitadas FROM configuracion WHERE id = 1');
+  res.json({ inscripciones_habilitadas: !!row.inscripciones_habilitadas });
+});
 
-  const { nombre, cedula, grupoReducido, masivo } = req.body;
+// PUT /api/configuracion
+app.put('/api/configuracion', async (req, res) => {
+  const estado = req.body.inscripciones_habilitadas ? 1 : 0;
+  await db.run('UPDATE configuracion SET inscripciones_habilitadas = ? WHERE id = 1', estado);
+  res.json({ success: true });
+});
 
-  // Trigger para borrar todos los resultados
-  if (
-    nombre.trim().toLowerCase() === 'borrar' &&
-    cedula === '00000000' &&
-    grupoReducido === '0'
-  ) {
-    inscritos = { 1: [], 2: [], 3: [], 4: [] };
-    return res.json({ success: true, deleted: true });
+// GET /api/estadisticas
+app.get('/api/estadisticas', async (req, res) => {
+  const masivos = await db.all('SELECT * FROM masivos WHERE activo = 1');
+  const stats = [];
+
+  for (const masivo of masivos) {
+    const inscritos = await db.get('SELECT COUNT(*) as count FROM inscripciones WHERE masivo_id = ?', masivo.id);
+    stats.push({
+      masivo_id: masivo.id,
+      nombre: masivo.nombre,
+      dia: masivo.dia,
+      horario: masivo.horario,
+      cupo_maximo: masivo.cupo_maximo,
+      inscritos: inscritos.count,
+      disponibles: masivo.cupo_maximo - inscritos.count
+    });
   }
 
-  if (!nombre || !cedula || !grupoReducido || !masivo)
-    return res.status(400).json({ error: 'Campos incompletos' });
-
-  if (inscritos[masivo].length >= MAX_CUPO)
-    return res.status(400).json({ error: 'Grupo lleno' });
-
-  // Evitar duplicados
-  if (
-    inscritos[masivo].some((i) => i.cedula === cedula || i.nombre === nombre)
-  )
-    return res.status(400).json({ error: 'Estudiante ya inscripto en este grupo' });
-
-  inscritos[masivo].push({ nombre, cedula, grupoReducido });
-  return res.json({ success: true });
+  res.json(stats);
 });
 
-// Obtener cupos
-app.get('/api/cupos', (req, res) => {
-  res.json({
-    grupos: GROUPS.map((g) => ({
-      ...g,
-      cupo: inscritos[g.id].length,
-      libre: MAX_CUPO - inscritos[g.id].length,
-    })),
-    inscriptionEnabled,
-  });
+// POST /api/inscribir
+app.post('/api/inscribir', async (req, res) => {
+  const { nombreCompleto, cedula, grupoReducido, masivoSeleccionado } = req.body;
+
+  // Validaciones
+  if (!nombreCompleto || !cedula || !grupoReducido || !masivoSeleccionado) {
+    return res.json({ success: false, error: 'Todos los campos son obligatorios' });
+  }
+  if (!/^\d{8}$/.test(cedula)) {
+    return res.json({ success: false, error: 'Cédula debe tener 8 dígitos' });
+  }
+
+  // Verifica configuracion
+  const config = await db.get('SELECT inscripciones_habilitadas FROM configuracion WHERE id = 1');
+  if (!config.inscripciones_habilitadas) {
+    return res.json({ success: false, error: 'Inscripciones cerradas' });
+  }
+
+  // Verifica duplicados
+  const existe = await db.get('SELECT * FROM inscripciones WHERE cedula = ?', cedula);
+  if (existe) {
+    return res.json({ success: false, error: 'Ya está inscripto' });
+  }
+
+  // Verifica cupo
+  const cupo = await db.get('SELECT COUNT(*) as count FROM inscripciones WHERE masivo_id = ?', masivoSeleccionado);
+  const masivo = await db.get('SELECT * FROM masivos WHERE id = ?', masivoSeleccionado);
+  if (cupo.count >= masivo.cupo_maximo) {
+    return res.json({ success: false, error: 'Cupo completo' });
+  }
+
+  // Inserta inscripción
+  await db.run(
+    'INSERT INTO inscripciones (nombre_completo, cedula, grupo_reducido, masivo_id, created_at) VALUES (?, ?, ?, ?, ?)',
+    nombreCompleto, cedula, grupoReducido, masivoSeleccionado, new Date().toISOString()
+  );
+  res.json({ success: true, message: 'Inscripción exitosa' });
 });
 
-// Habilitar/deshabilitar inscripción
-app.post('/api/habilitar', (req, res) => {
-  const { enabled } = req.body;
-  inscriptionEnabled = !!enabled;
-  res.json({ success: true, inscriptionEnabled });
+// GET /api/descargar-csv
+app.get('/api/descargar-csv', async (req, res) => {
+  const inscripciones = await db.all(`
+    SELECT i.*, m.nombre as masivo_nombre, m.dia, m.horario
+    FROM inscripciones i
+    JOIN masivos m ON i.masivo_id = m.id
+    ORDER BY i.created_at ASC
+  `);
+
+  let csv = 'Nombre Completo,Cédula,Grupo Reducido,Masivo,Dia,Horario,Fecha Inscripción\n';
+  for (const ins of inscripciones) {
+    csv += `"${ins.nombre_completo}","${ins.cedula}","${ins.grupo_reducido}","${ins.masivo_nombre}","${ins.dia}","${ins.horario}","${ins.created_at}"\n`;
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="inscripciones.csv"');
+  res.send(csv);
 });
 
-// Descargar Excel
-app.get('/api/excel', (req, res) => {
-  const sheets = {};
-  GROUPS.forEach((g) => {
-    sheets[g.name] = [
-      ['Nombre Completo', 'Cédula de Identidad', 'Grupo Reducido'],
-      ...inscritos[g.id].map((i) => [i.nombre, i.cedula, i.grupoReducido]),
-    ];
-  });
-
-  const workbook = XLSX.utils.book_new();
-  Object.entries(sheets).forEach(([name, data]) => {
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    XLSX.utils.book_append_sheet(workbook, ws, name);
-  });
-
-  const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-  res.setHeader('Content-Disposition', 'attachment; filename=\"gimnasia1_2025.xlsx\"');
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.send(buf);
+// Borrar todas las inscripciones (opcional, admin)
+app.delete('/api/inscripciones', async (req, res) => {
+  await db.run('DELETE FROM inscripciones');
+  res.json({ success: true, message: 'Todas las inscripciones eliminadas' });
 });
 
-app.listen(port, () => {
-  console.log(`Backend running on port ${port}`);
+// Inicia el servidor
+app.listen(PORT, () => {
+  console.log(`Backend corriendo en http://localhost:${PORT}`);
 });
