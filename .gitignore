@@ -1,0 +1,12 @@
+# Node modules
+frontend/node_modules/
+backend/node_modules/
+
+# Bases de datos locales
+backend/db.sqlite
+
+# Archivos de entorno
+backend/.env
+
+# Build y deploy de frontend
+frontend/dist/
