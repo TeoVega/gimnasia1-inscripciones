@@ -12,7 +12,23 @@ const PORT = process.env.PORT || 4000;
 const DB_PATH = process.env.DB_PATH || './db.sqlite';
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://gimnasia1-inscripciones-esto.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: true
+}));
+
+// O si prefieres permitir todos los orígenes (menos seguro pero más simple):
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
 app.use(express.json());
 
 app.get('/', (req, res) => {
