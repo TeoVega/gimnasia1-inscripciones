@@ -172,8 +172,8 @@ const App = () => {
             <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
               <Users className="mr-2" size={20} />
               Formulario de Inscripción
-             <p className="text-gray-600">Todos los espacios de masivos serán en Malvin Norte</p>
             </h2>
+            <p className="text-gray-600">Todos los espacios de masivos serán en Malvin Norte</p>
 
             {!configuracion.inscripciones_habilitadas && (
               <div className="mb-4 p-3 rounded-lg bg-yellow-100 text-yellow-800 flex items-center">
