@@ -13,7 +13,7 @@ const DB_PATH = process.env.DB_PATH || './db.sqlite';
 const app = express();
 app.use(cors());
 app.use(express.json());
-const XLSX = require('xlsx');
+import XLSX from 'xlsx';
 
 // Inicializa la base de datos
 let db;
