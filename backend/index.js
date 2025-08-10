@@ -128,6 +128,10 @@ app.delete('/api/inscripciones', async (req, res) => {
   res.json({ success: true, message: 'Todas las inscripciones eliminadas' });
 });
 
+app.get('/', (req, res) => {
+  res.send('🚀 Gimnasia1 Backend en línea. Usa /api para la API.');
+});
+
 // Inicia el servidor
 app.listen(PORT, () => {
   console.log(`Backend corriendo en http://localhost:${PORT}`);
