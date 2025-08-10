@@ -43,18 +43,23 @@ export const actualizarConfiguracion = async (nuevoEstado) => {
   }
 };
 
-export const exportarCSV = async () => {
-  try {
-    const res = await axios.get(`${API_BASE}/descargar-csv`, { responseType: "blob" });
-    const url = window.URL.createObjectURL(new Blob([res.data]));
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "Inscripciones_Gimnasia1.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
+export const exportarExcel = async () => {
+  const response = await fetch('/api/descargar-excel');
+  
+  if (!response.ok) {
+    throw new Error('Error al descargar Excel');
   }
+  
+  // Crear blob y descargar automáticamente
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'inscripciones_por_masivos.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+  
+  return response;
 };
