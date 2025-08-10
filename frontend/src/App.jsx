@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import useInscripciones from './hooks/useInscripciones';
+import { Users, Clock, Calendar, CheckCircle, AlertCircle, Download, Settings, Lock, Unlock, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import LockIcon from '@mui/icons-material/Lock';
 import DownloadIcon from '@mui/icons-material/Download';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+
 
 const API = "https://gimnasia1-inscripciones.onrender.com/api";
 
