@@ -134,12 +134,24 @@ app.post('/api/inscribir', async (req, res) => {
 
 app.get('/api/descargar-excel', async (req, res) => {
   try {
+    console.log('=== INICIO DESCARGA EXCEL ===');
+    
     const inscripciones = await db.all(`
       SELECT i.*, m.nombre as masivo_nombre, m.dia, m.horario
       FROM inscripciones i
       JOIN masivos m ON i.masivo_id = m.id
       ORDER BY m.nombre, i.created_at ASC
     `);
+
+    console.log(`Inscripciones encontradas: ${inscripciones.length}`);
+    
+    if (inscripciones.length === 0) {
+      console.log('No hay inscripciones, devolviendo error 404');
+      return res.status(404).json({ error: 'No hay inscripciones para exportar' });
+    }
+
+    // Mostrar una inscripción de ejemplo
+    console.log('Ejemplo de inscripción:', JSON.stringify(inscripciones[0], null, 2));
 
     // Agrupar por masivos
     const gruposPorMasivo = inscripciones.reduce((acc, ins) => {
@@ -151,8 +163,17 @@ app.get('/api/descargar-excel', async (req, res) => {
       return acc;
     }, {});
 
+    console.log(`Grupos de masivos creados: ${Object.keys(gruposPorMasivo).length}`);
+    console.log('Nombres de masivos:', Object.keys(gruposPorMasivo));
+
+    // Verificar que XLSX esté disponible
+    console.log('XLSX disponible:', typeof XLSX !== 'undefined');
+    console.log('XLSX.utils disponible:', typeof XLSX.utils !== 'undefined');
+
     // Crear libro de Excel
     const workbook = XLSX.utils.book_new();
+    console.log('Workbook creado');
+    
     const sheetData = [];
     
     Object.keys(gruposPorMasivo).forEach((masivo, index) => {
@@ -182,29 +203,75 @@ app.get('/api/descargar-excel', async (req, res) => {
       sheetData.push([`TOTAL ${masivo}: ${gruposPorMasivo[masivo].length} inscriptos`]);
     });
     
+    console.log(`Filas de datos creadas: ${sheetData.length}`);
+    
     const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+    console.log('Worksheet creado');
     
     // Configurar anchos de columna
     worksheet['!cols'] = [
-      { width: 35 }, // Nombre Completo
-      { width: 15 }, // Cédula
-      { width: 15 }  // Grupo Reducido
+      { width: 35 }, 
+      { width: 15 }, 
+      { width: 15 }
     ];
     
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Inscripciones por Masivos');
+    console.log('Hoja agregada al workbook');
 
     // Generar buffer del archivo Excel
+    console.log('Generando buffer...');
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    console.log(`Buffer generado exitosamente, tamaño: ${buffer.length} bytes`);
     
     // Configurar headers para descarga
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="inscripciones_por_masivos.xlsx"');
+    res.setHeader('Content-Length', buffer.length);
     
+    console.log('Headers configurados, enviando archivo...');
     res.send(buffer);
+    console.log('=== ARCHIVO ENVIADO EXITOSAMENTE ===');
     
   } catch (error) {
-    console.error('Error al generar Excel:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error('=== ERROR EN DESCARGA EXCEL ===');
+    console.error('Mensaje:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('=====================================');
+    
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      details: error.message 
+    });
+  }
+});
+
+// ENDPOINT DE PRUEBA SIMPLE
+app.get('/api/test-download', (req, res) => {
+  try {
+    console.log('=== TEST DOWNLOAD SIMPLE ===');
+    
+    // Crear Excel básico
+    const testData = [
+      ['Nombre', 'Cedula', 'Grupo'],
+      ['Juan Pérez', '12345678', 'Sí'],
+      ['María García', '87654321', 'No']
+    ];
+    
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(testData);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Test');
+    
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="test.xlsx"');
+    
+    res.send(buffer);
+    console.log('Test download enviado');
+    
+  } catch (error) {
+    console.error('Error en test download:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
