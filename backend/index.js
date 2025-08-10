@@ -15,6 +15,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'API de Inscripciones funcionando correctamente',
+    endpoints: [
+      '/api/inscripciones',
+      '/api/masivos',
+      '/api/descargar-excel',
+      '/api/estadisticas'
+    ]
+  });
+});
 
 // Inicializa la base de datos
 let db;
