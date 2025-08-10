@@ -198,7 +198,6 @@ const App = () => {
 
             <div className="space-y-4">
               <div>
-                <p className="text-gray-600">Todos los espacios de masivos serán en Malvin Norte</p>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre Completo *
                 </label>
@@ -248,6 +247,7 @@ const App = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Seleccionar Masivo Teórico *
                 </label>
+                <p className="text-gray-600">Todos los espacios de masivos serán en Malvin Norte</p>
                 <div className="space-y-2">
                   {estadisticas.map((stat) => (
                     <label
