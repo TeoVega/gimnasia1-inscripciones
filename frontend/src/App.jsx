@@ -158,7 +158,7 @@ const App = () => {
             <h2 className="text-xl font-semibold text-gray-700 mb-2">
               Inscripción a Masivos Teóricos
             </h2>
-            <p className="text-gray-600">Facultad de Educación Física</p>
+            <p className="text-gray-600">ISEF</p>
             <div className="mt-3 flex items-center justify-center">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
               <span className="text-sm text-gray-500">Sistema en tiempo real activo</span>
@@ -171,7 +171,8 @@ const App = () => {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
               <Users className="mr-2" size={20} />
-              Formulario de Inscripción - Todos los espacios de masivos serán en Malvin Norte
+              Formulario de Inscripción
+             <p className="text-gray-600">Todos los espacios de masivos serán en Malvin Norte</p>
             </h2>
 
             {!configuracion.inscripciones_habilitadas && (
