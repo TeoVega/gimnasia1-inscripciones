@@ -88,16 +88,15 @@ const App = () => {
   const handleDescargarExcel = async () => {
     if (!botonesDesbloqueados) return;
     try {
-      const resultado = await exportarCSV();
-      if (resultado.success) {
-        setMensaje({ tipo: 'exito', texto: 'Archivo descargado exitosamente' });
-      } else {
-        setMensaje({ tipo: 'error', texto: resultado.error });
-      }
-    } catch (error) {
-      setMensaje({ tipo: 'error', texto: 'Error al descargar el archivo' });
-    }
-  };
+      await exportarExcel(); // No necesita el resultado
+    
+    setMensaje({ tipo: 'exito', texto: 'Archivo descargado exitosamente' });
+    
+  } catch (error) {
+    console.error('Error en descarga:', error);
+    setMensaje({ tipo: 'error', texto: 'Error al descargar el archivo' });
+  }
+};
 
   const handleToggleInscripcion = async () => {
     if (!botonesDesbloqueados) return;
