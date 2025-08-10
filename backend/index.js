@@ -22,7 +22,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   credentials: true
 }));
-
+app.options('*', cors());
 // O si prefieres permitir todos los orígenes (menos seguro pero más simple):
 app.use(cors({
   origin: '*',
