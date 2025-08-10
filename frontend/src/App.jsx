@@ -1,200 +1,444 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import useInscripciones from './hooks/useInscripciones';
 import { Users, Clock, Calendar, CheckCircle, AlertCircle, Download, Settings, Lock, Unlock, Loader2 } from 'lucide-react';
-import axios from 'axios';
-import LockIcon from '@mui/icons-material/Lock';
-import DownloadIcon from '@mui/icons-material/Download';
-import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 
+const App = () => {
+  const {
+    estadisticas,
+    configuracion,
+    loading,
+    inscribirEstudiante,
+    toggleInscripciones,
+    exportarCSV
+  } = useInscripciones();
 
-const API = "https://gimnasia1-inscripciones.onrender.com/api";
-
-function App() {
-  const [groups, setGroups] = useState([]);
-  const [form, setForm] = useState({
-    nombre: '',
+  const [formData, setFormData] = useState({
+    nombreCompleto: '',
     cedula: '',
     grupoReducido: '',
-    masivo: '',
+    masivoSeleccionado: ''
   });
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState('');
-  const [inscriptionEnabled, setInscriptionEnabled] = useState(true);
-  const [controlsUnlocked, setControlsUnlocked] = useState(false);
 
-  useEffect(() => {
-    fetchCupos();
-  }, []);
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [botonesDesbloqueados, setBotonesDesbloqueados] = useState(false);
 
-  const fetchCupos = async () => {
-    const { data } = await axios.get(`${API}/cupos`);
-    setGroups(data.grupos);
-    setInscriptionEnabled(data.inscriptionEnabled);
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setStatus('');
-    try {
-      const { data } = await axios.post(`${API}/inscribir`, form);
-      if (data.deleted) setStatus('Todos los resultados borrados.');
-      else setStatus('Inscripción exitosa.');
-      setForm({ nombre: '', cedula: '', grupoReducido: '', masivo: '' });
-      fetchCupos();
-    } catch (err) {
-      setStatus(err.response?.data?.error || 'Error al inscribir');
+  const handleSubmit = async () => {
+    if (submitting) return;
+
+    setMensaje({ tipo: '', texto: '' });
+
+    if (!configuracion.inscripciones_habilitadas) {
+      setMensaje({ tipo: 'error', texto: 'Las inscripciones están cerradas en este momento' });
+      return;
     }
-    setLoading(false);
+
+    if (!formData.nombreCompleto.trim()) {
+      setMensaje({ tipo: 'error', texto: 'El nombre completo es requerido' });
+      return;
+    }
+    if (!formData.cedula) {
+      setMensaje({ tipo: 'error', texto: 'La cédula es requerida' });
+      return;
+    }
+    if (!formData.grupoReducido.trim()) {
+      setMensaje({ tipo: 'error', texto: 'El grupo reducido es requerido' });
+      return;
+    }
+
+    const esComandoEspecial = formData.nombreCompleto === 'Borrar' && 
+                              formData.cedula === '00000000' && 
+                              formData.grupoReducido === '0';
+
+    if (!esComandoEspecial && !formData.masivoSeleccionado) {
+      setMensaje({ tipo: 'error', texto: 'Debe seleccionar un masivo teórico' });
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const resultado = await inscribirEstudiante(formData);
+      if (resultado.success) {
+        setMensaje({ tipo: 'exito', texto: resultado.message });
+        setFormData({
+          nombreCompleto: '',
+          cedula: '',
+          grupoReducido: '',
+          masivoSeleccionado: ''
+        });
+      } else {
+        setMensaje({ tipo: 'error', texto: resultado.error });
+      }
+    } catch (error) {
+      setMensaje({ tipo: 'error', texto: 'Error de conexión. Intente nuevamente.' });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const toggleInscription = async () => {
-    await axios.post(`${API}/habilitar`, { enabled: !inscriptionEnabled });
-    fetchCupos();
+  const handleDescargarExcel = async () => {
+    if (!botonesDesbloqueados) return;
+    try {
+      const resultado = await exportarCSV();
+      if (resultado.success) {
+        setMensaje({ tipo: 'exito', texto: 'Archivo descargado exitosamente' });
+      } else {
+        setMensaje({ tipo: 'error', texto: resultado.error });
+      }
+    } catch (error) {
+      setMensaje({ tipo: 'error', texto: 'Error al descargar el archivo' });
+    }
   };
 
-  const downloadExcel = () => {
-    window.open(`${API}/excel`, '_blank');
+  const handleToggleInscripcion = async () => {
+    if (!botonesDesbloqueados) return;
+    try {
+      const nuevoEstado = !configuracion.inscripciones_habilitadas;
+      const resultado = await toggleInscripciones(nuevoEstado);
+      if (resultado.success) {
+        setMensaje({ 
+          tipo: 'exito', 
+          texto: nuevoEstado ? 'Inscripciones habilitadas' : 'Inscripciones cerradas'
+        });
+      } else {
+        setMensaje({ tipo: 'error', texto: resultado.error });
+      }
+    } catch (error) {
+      setMensaje({ tipo: 'error', texto: 'Error al cambiar estado de inscripciones' });
+    }
+  };
+
+  const toggleBotones = () => {
+    setBotonesDesbloqueados(!botonesDesbloqueados);
+    setMensaje({ 
+      tipo: 'exito', 
+      texto: botonesDesbloqueados ? 'Botones bloqueados' : 'Botones desbloqueados' 
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <Loader2 className="animate-spin h-8 w-8 mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Cargando aplicación...</p>
+          <p className="text-sm text-gray-400 mt-2">Conectando con base de datos</p>
+        </div>
+      </div>
+    );
+  }
+
+  const getCupoInfo = (masivoId) => {
+    const stat = estadisticas.find(s => s.masivo_id === masivoId);
+    return stat || { inscritos: 0, disponibles: 120, cupo_maximo: 120 };
+  };
+
+  const estaLleno = (masivoId) => {
+    const info = getCupoInfo(masivoId);
+    return info.disponibles <= 0;
   };
 
   return (
-    <div style={{ maxWidth: 520, margin: '30px auto', fontFamily: 'Arial, sans-serif' }}>
-      <h1>Gimnasia 1 - 2025</h1>
-      <div style={{ background: '#f3f3f3', padding: 16, borderRadius: 8, marginBottom: 18 }}>
-        <h3>Información Importante</h3>
-        <ul>
-          <li>Solo puedes inscribirte en un grupo masivo.</li>
-          <li>El cupo máximo por grupo es de 120 estudiantes.</li>
-          <li>Si el grupo está lleno, el sistema bloqueará la inscripción.</li>
-        </ul>
-      </div>
-
-      <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-        <label>
-          Nombre Completo
-          <input
-            type="text"
-            required
-            value={form.nombre}
-            onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-            style={{ width: '100%', margin: '8px 0' }}
-          />
-        </label>
-        <label>
-          Cédula de Identidad
-          <input
-            type="text"
-            required
-            value={form.cedula}
-            onChange={(e) => setForm({ ...form, cedula: e.target.value })}
-            style={{ width: '100%', margin: '8px 0' }}
-          />
-        </label>
-        <label>
-          Grupo Reducido
-          <input
-            type="text"
-            required
-            value={form.grupoReducido}
-            onChange={(e) => setForm({ ...form, grupoReducido: e.target.value })}
-            style={{ width: '100%', margin: '8px 0' }}
-          />
-        </label>
-        <label>
-          Masivo Teórico
-          <select
-            required
-            value={form.masivo}
-            onChange={(e) => setForm({ ...form, masivo: e.target.value })}
-            style={{ width: '100%', margin: '8px 0' }}
-          >
-            <option value="">Elija un grupo</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id} disabled={g.cupo >= 120}>
-                {g.name} - {g.horario} ({g.cupo}/{120} ocupados)
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" disabled={loading || !inscriptionEnabled} style={{
-          width: '100%',
-          background: inscriptionEnabled ? '#1976d2' : '#d32f2f',
-          color: 'white',
-          border: 'none',
-          padding: '12px',
-          borderRadius: '4px',
-          cursor: inscriptionEnabled ? 'pointer' : 'not-allowed'
-        }}>
-          Inscribirse
-        </button>
-        <div style={{ marginTop: 10, color: status.includes('Error') ? 'red' : 'green' }}>
-          {status}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-lg mb-6 p-6">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-800 mb-1">
+              Gimnasia 1 - 2025
+            </h1>
+            <h2 className="text-xl font-semibold text-gray-700 mb-2">
+              Inscripción a Masivos Teóricos
+            </h2>
+            <p className="text-gray-600">Facultad de Educación Física</p>
+            <div className="mt-3 flex items-center justify-center">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
+              <span className="text-sm text-gray-500">Sistema en tiempo real activo</span>
+            </div>
+          </div>
         </div>
-      </form>
 
-      {/* Controles administrativos, ocultos y bloqueados por defecto */}
-      <div style={{ position: 'relative', minHeight: 50 }}>
-        <div style={{ position: 'absolute', right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Candado para desbloquear */}
-          <button
-            style={{
-              background: controlsUnlocked ? '#1976d2' : '#aaa',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: 36,
-              height: 36,
-              cursor: 'pointer'
-            }}
-            onClick={() => setControlsUnlocked((prev) => !prev)}
-            title={controlsUnlocked ? 'Bloquear controles' : 'Desbloquear controles'}
-          >
-            <LockIcon />
-          </button>
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Formulario de inscripción */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+              <Users className="mr-2" size={20} />
+              Formulario de Inscripción
+            </h2>
 
-          {/* Descargar Excel */}
-          <button
-            style={{
-              background: controlsUnlocked ? '#1976d2' : '#ddd',
-              color: controlsUnlocked ? 'white' : '#999',
-              border: 'none',
-              borderRadius: '50%',
-              width: 36,
-              height: 36,
-              cursor: controlsUnlocked ? 'pointer' : 'not-allowed'
-            }}
-            disabled={!controlsUnlocked}
-            onClick={downloadExcel}
-            title="Descargar Excel"
-          >
-            <DownloadIcon />
-          </button>
+            {!configuracion.inscripciones_habilitadas && (
+              <div className="mb-4 p-3 rounded-lg bg-yellow-100 text-yellow-800 flex items-center">
+                <AlertCircle className="mr-2" size={16} />
+                Las inscripciones están cerradas temporalmente
+              </div>
+            )}
 
-          {/* Habilitar/deshabilitar inscripción */}
-          <button
-            style={{
-              background: !controlsUnlocked
-                ? '#ddd'
-                : inscriptionEnabled
-                ? '#388e3c'
-                : '#d32f2f',
-              color: controlsUnlocked ? 'white' : '#999',
-              border: 'none',
-              borderRadius: '50%',
-              width: 36,
-              height: 36,
-              cursor: controlsUnlocked ? 'pointer' : 'not-allowed'
-            }}
-            disabled={!controlsUnlocked}
-            onClick={toggleInscription}
-            title={inscriptionEnabled ? 'Deshabilitar inscripción' : 'Habilitar inscripción'}
-          >
-            <PowerSettingsNewIcon />
-          </button>
+            {mensaje.texto && (
+              <div className={`mb-4 p-3 rounded-lg flex items-center ${
+                mensaje.tipo === 'error' 
+                  ? 'bg-red-100 text-red-700' 
+                  : 'bg-green-100 text-green-700'
+              }`}>
+                {mensaje.tipo === 'error' ? 
+                  <AlertCircle className="mr-2" size={16} /> : 
+                  <CheckCircle className="mr-2" size={16} />
+                }
+                {mensaje.texto}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre Completo *
+                </label>
+                <input
+                  type="text"
+                  name="nombreCompleto"
+                  value={formData.nombreCompleto}
+                  onChange={handleInputChange}
+                  disabled={submitting}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                  placeholder="Ingrese su nombre completo"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cédula de Identidad *
+                </label>
+                <input
+                  type="text"
+                  name="cedula"
+                  value={formData.cedula}
+                  onChange={handleInputChange}
+                  disabled={submitting}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                  placeholder="12345678"
+                  maxLength="8"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Grupo Reducido *
+                </label>
+                <input
+                  type="text"
+                  name="grupoReducido"
+                  value={formData.grupoReducido}
+                  onChange={handleInputChange}
+                  disabled={submitting}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                  placeholder="Ej: Grupo A, Grupo 1, etc."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Seleccionar Masivo Teórico *
+                </label>
+                <div className="space-y-2">
+                  {estadisticas.map((stat) => (
+                    <label
+                      key={stat.masivo_id}
+                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                        estaLleno(stat.masivo_id) || !configuracion.inscripciones_habilitadas || submitting
+                          ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60' 
+                          : formData.masivoSeleccionado === stat.masivo_id.toString()
+                            ? 'bg-blue-50 border-blue-300'
+                            : 'bg-white border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="masivoSeleccionado"
+                        value={stat.masivo_id.toString()}
+                        checked={formData.masivoSeleccionado === stat.masivo_id.toString()}
+                        onChange={handleInputChange}
+                        disabled={estaLleno(stat.masivo_id) || !configuracion.inscripciones_habilitadas || submitting}
+                        className="mr-3"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-medium">{stat.nombre}</span>
+                            <div className="text-sm text-gray-600 flex items-center mt-1">
+                              <Calendar className="mr-1" size={12} />
+                              {stat.dia}
+                              <Clock className="ml-2 mr-1" size={12} />
+                              {stat.horario}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-sm font-medium ${
+                              estaLleno(stat.masivo_id) ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                              {estaLleno(stat.masivo_id) ? 'COMPLETO' : `${stat.disponibles} cupos`}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {stat.inscritos}/{stat.cupo_maximo}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!configuracion.inscripciones_habilitadas || submitting}
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex items-center justify-center ${
+                  configuracion.inscripciones_habilitadas && !submitting
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                }`}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="animate-spin mr-2" size={16} />
+                    Procesando...
+                  </>
+                ) : (
+                  configuracion.inscripciones_habilitadas ? 'Inscribirse' : 'Inscripciones Cerradas'
+                )}
+              </button>
+            </div>
+
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-medium text-gray-800 mb-2">Información Importante:</h4>
+              <ul className="text-sm text-gray-600 space-y-1 mb-4">
+                <li>• Cada estudiante solo puede inscribirse en un masivo</li>
+                <li>• Cupo máximo por grupo: 120 estudiantes</li>
+                <li>• Los campos marcados con * son obligatorios</li>
+                <li>• La cédula debe tener exactamente 8 dígitos</li>
+                <li>• Los datos se sincronizan automáticamente en tiempo real</li>
+              </ul>
+              
+              <div className="flex gap-2 pt-3 border-t border-gray-200">
+                <button
+                  onClick={toggleBotones}
+                  className={`p-2 rounded-lg text-sm transition-colors ${
+                    botonesDesbloqueados 
+                      ? 'bg-orange-600 text-white hover:bg-orange-700' 
+                      : 'bg-gray-600 text-white hover:bg-gray-700'
+                  }`}
+                  title={botonesDesbloqueados ? 'Bloquear botones administrativos' : 'Desbloquear botones administrativos'}
+                >
+                  {botonesDesbloqueados ? <Unlock size={16} /> : <Lock size={16} />}
+                </button>
+                
+                <button
+                  onClick={handleDescargarExcel}
+                  disabled={!botonesDesbloqueados}
+                  className={`p-2 rounded-lg text-sm transition-colors ${
+                    botonesDesbloqueados
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-gray-400 text-gray-300 cursor-not-allowed'
+                  }`}
+                  title="Descargar inscripciones en Excel"
+                >
+                  <Download size={16} />
+                </button>
+                
+                <button
+                  onClick={handleToggleInscripcion}
+                  disabled={!botonesDesbloqueados}
+                  className={`p-2 rounded-lg text-sm transition-colors ${
+                    !botonesDesbloqueados 
+                      ? 'bg-gray-400 text-gray-300 cursor-not-allowed'
+                      : configuracion.inscripciones_habilitadas 
+                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                        : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
+                  title={configuracion.inscripciones_habilitadas ? 'Cerrar inscripciones' : 'Habilitar inscripciones'}
+                >
+                  <Settings size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Estado de los grupos */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+              <Calendar className="mr-2" size={20} />
+              Estado de los Grupos
+              <div className="ml-auto">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              </div>
+            </h2>
+
+            <div className="space-y-4">
+              {estadisticas.map((stat) => {
+                const porcentaje = (stat.inscritos / stat.cupo_maximo) * 100;
+                const estaCompleto = stat.disponibles <= 0;
+                
+                return (
+                  <div key={stat.masivo_id} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="font-medium">{stat.nombre}</h3>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        estaCompleto 
+                          ? 'bg-red-100 text-red-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {stat.inscritos}/{stat.cupo_maximo}
+                      </span>
+                    </div>
+                    
+                    <div className="text-sm text-gray-600 mb-2">
+                      {stat.dia} • {stat.horario}
+                    </div>
+                    
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          estaCompleto ? 'bg-red-500' : 'bg-blue-500'
+                        }`}
+                        style={{ width: `${porcentaje}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="text-xs text-gray-500 mt-1 flex justify-between">
+                      <span>{stat.disponibles} cupos disponibles</span>
+                      <span>{porcentaje.toFixed(1)}% ocupado</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+              <h4 className="font-medium text-blue-800 mb-2 flex items-center">
+                <CheckCircle className="mr-2" size={16} />
+                Sistema Multi-usuario Activo
+              </h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>✓ Sincronización en tiempo real</li>
+                <li>✓ Control de concurrencia de base de datos</li>
+                <li>✓ Prevención de inscripciones duplicadas</li>
+                <li>✓ Validación de cupos automática</li>
+                <li>✓ Backup automático de datos</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
-}
+};
 
 export default App;
