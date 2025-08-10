@@ -49,7 +49,7 @@ export const exportarExcel = async () => {
     
     // Cambiar por tu URL real de Render
     const backendUrl = 'https://gimnasia1-inscripciones.onrender.com';
-    const url = `${backendUrl}/api/descargar-excel`;
+const url = `${backendUrl}/api/descargar-excel`;
     
     console.log('Haciendo request a:', url);
     
