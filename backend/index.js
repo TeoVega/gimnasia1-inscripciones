@@ -163,10 +163,10 @@ app.get('/api/estadisticas', async (req, res) => {
 // POST /api/inscribir
 app.post('/api/inscribir', async (req, res) => {
   try {
-    const { nombreCompleto, cedula, grupoReducido, masivoSeleccionado } = req.body;
+    const { nombre, apellido, cedula, grupoReducido, masivoSeleccionado } = req.body;
 
     // Validaciones
-    if (!nombreCompleto || !cedula || !grupoReducido || !masivoSeleccionado) {
+    if (!nombre || !apellido || !cedula || !grupoReducido || !masivoSeleccionado) {
       return res.json({ success: false, error: 'Todos los campos son obligatorios' });
     }
     if (!/^\d{8}$/.test(cedula)) {
@@ -219,7 +219,8 @@ app.post('/api/inscribir', async (req, res) => {
     const { error: insertError } = await supabase
       .from('inscripciones')
       .insert({
-        nombre_completo: nombreCompleto,
+        nombre: nombre,
+        apellido: apellido,
         cedula: cedula,
         grupo_reducido: grupoReducido,
         masivo_id: masivoSeleccionado,
@@ -309,7 +310,7 @@ app.get('/api/descargar-excel', async (req, res) => {
       // Datos
       gruposPorMasivo[masivo].forEach(ins => {
         sheetData.push([
-          ins.nombre_completo, 
+          `${ins.nombre} ${ins.apellido}`, // Concatenar nombre y apellido
           ins.cedula, 
           ins.grupo_reducido
         ]);
