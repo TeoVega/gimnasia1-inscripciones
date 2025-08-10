@@ -13,6 +13,7 @@ const DB_PATH = process.env.DB_PATH || './db.sqlite';
 const app = express();
 app.use(cors());
 app.use(express.json());
+const XLSX = require('xlsx');
 
 // Inicializa la base de datos
 let db;
@@ -103,33 +104,94 @@ app.post('/api/inscribir', async (req, res) => {
   res.json({ success: true, message: 'Inscripción exitosa' });
 });
 
-// GET /api/descargar-csv
-app.get('/api/descargar-csv', async (req, res) => {
-  const inscripciones = await db.all(`
-    SELECT i.*, m.nombre as masivo_nombre, m.dia, m.horario
-    FROM inscripciones i
-    JOIN masivos m ON i.masivo_id = m.id
-    ORDER BY i.created_at ASC
-  `);
+app.get('/api/descargar-excel', async (req, res) => {
+  try {
+    const inscripciones = await db.all(`
+      SELECT i.*, m.nombre as masivo_nombre, m.dia, m.horario
+      FROM inscripciones i
+      JOIN masivos m ON i.masivo_id = m.id
+      ORDER BY m.nombre, i.created_at ASC
+    `);
 
-  let csv = 'Nombre Completo,Cédula,Grupo Reducido,Masivo,Dia,Horario,Fecha Inscripción\n';
-  for (const ins of inscripciones) {
-    csv += `"${ins.nombre_completo}","${ins.cedula}","${ins.grupo_reducido}","${ins.masivo_nombre}","${ins.dia}","${ins.horario}","${ins.created_at}"\n`;
+    // Agrupar por masivos
+    const gruposPorMasivo = inscripciones.reduce((acc, ins) => {
+      const masivo = ins.masivo_nombre;
+      if (!acc[masivo]) {
+        acc[masivo] = [];
+      }
+      acc[masivo].push(ins);
+      return acc;
+    }, {});
+
+    // Crear libro de Excel
+    const workbook = XLSX.utils.book_new();
+    const sheetData = [];
+    
+    Object.keys(gruposPorMasivo).forEach((masivo, index) => {
+      if (index > 0) {
+        sheetData.push([]); // Fila vacía como separador
+      }
+      
+      // Título del grupo
+      sheetData.push([`=== ${masivo.toUpperCase()} ===`]);
+      sheetData.push([`Día: ${gruposPorMasivo[masivo][0].dia}`, `Horario: ${gruposPorMasivo[masivo][0].horario}`]);
+      sheetData.push([]); // Fila vacía
+      
+      // Encabezados
+      sheetData.push(['Nombre Completo', 'Cédula', 'Grupo Reducido']);
+      
+      // Datos
+      gruposPorMasivo[masivo].forEach(ins => {
+        sheetData.push([
+          ins.nombre_completo, 
+          ins.cedula, 
+          ins.grupo_reducido
+        ]);
+      });
+      
+      // Total
+      sheetData.push([]);
+      sheetData.push([`TOTAL ${masivo}: ${gruposPorMasivo[masivo].length} inscriptos`]);
+    });
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+    
+    // Configurar anchos de columna
+    worksheet['!cols'] = [
+      { width: 35 }, // Nombre Completo
+      { width: 15 }, // Cédula
+      { width: 15 }  // Grupo Reducido
+    ];
+    
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inscripciones por Masivos');
+
+    // Generar buffer del archivo Excel
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Configurar headers para descarga
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="inscripciones_por_masivos.xlsx"');
+    
+    res.send(buffer);
+    
+  } catch (error) {
+    console.error('Error al generar Excel:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
+});
 
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="inscripciones.csv"');
-  res.send(csv);
+// OPCIONAL: Mantener compatibilidad con el endpoint anterior
+// Puedes redirigir el CSV al Excel o mantener ambos
+app.get('/api/descargar-csv', async (req, res) => {
+  // Redirigir al nuevo endpoint de Excel
+  req.url = '/api/descargar-excel';
+  req.app.handle(req, res);
 });
 
 // Borrar todas las inscripciones (opcional, admin)
 app.delete('/api/inscripciones', async (req, res) => {
   await db.run('DELETE FROM inscripciones');
   res.json({ success: true, message: 'Todas las inscripciones eliminadas' });
-});
-
-app.get('/', (req, res) => {
-  res.send('🚀 Gimnasia1 Backend en línea. Usa /api para la API.');
 });
 
 // Inicia el servidor
