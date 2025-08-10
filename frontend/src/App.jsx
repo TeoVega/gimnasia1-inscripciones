@@ -9,7 +9,7 @@ const App = () => {
     loading,
     inscribirEstudiante,
     toggleInscripciones,
-    exportarCSV
+    exportarExcel
   } = useInscripciones();
 
   const [formData, setFormData] = useState({
