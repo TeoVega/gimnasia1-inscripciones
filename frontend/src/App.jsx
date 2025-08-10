@@ -171,7 +171,7 @@ const App = () => {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
               <Users className="mr-2" size={20} />
-              Formulario de Inscripción
+              Formulario de Inscripción - Todos los espacios de masivos serán en Malvin Norte
             </h2>
 
             {!configuracion.inscripciones_habilitadas && (
