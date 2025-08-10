@@ -1,15 +1,23 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
-import fs from 'fs/promises';
+import { createClient } from '@supabase/supabase-js';
 import XLSX from 'xlsx';
 
 dotenv.config();
 
 const PORT = process.env.PORT || 4000;
-const DB_PATH = process.env.DB_PATH || './db.sqlite';
+
+// Configuración de Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('ERROR: SUPABASE_URL y SUPABASE_ANON_KEY son requeridas');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const app = express();
 app.use(cors({
@@ -23,17 +31,12 @@ app.use(cors({
   credentials: true
 }));
 app.options('*', cors());
-// O si prefieres permitir todos los orígenes (menos seguro pero más simple):
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-}));
+
 app.use(express.json());
 
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'API de Inscripciones funcionando correctamente',
+    message: 'API de Inscripciones funcionando correctamente con Supabase',
     endpoints: [
       '/api/inscripciones',
       '/api/masivos',
@@ -43,109 +46,223 @@ app.get('/', (req, res) => {
   });
 });
 
-// Inicializa la base de datos
-let db;
-async function initDb() {
-  db = await open({
-    filename: DB_PATH,
-    driver: sqlite3.Database,
-  });
-
-  // Ejecuta el schema
-  const schema = await fs.readFile('./schema.sql', 'utf-8');
-  await db.exec(schema);
+// Función para inicializar datos por defecto
+async function initializeDefaultData() {
+  try {
+    // Verificar si ya existe configuración
+    const { data: config } = await supabase
+      .from('configuracion')
+      .select('*')
+      .eq('id', 1)
+      .single();
+    
+    if (!config) {
+      // Crear configuración por defecto
+      await supabase
+        .from('configuracion')
+        .insert({ id: 1, inscripciones_habilitadas: true });
+      console.log('Configuración por defecto creada');
+    }
+  } catch (error) {
+    console.error('Error inicializando datos:', error);
+  }
 }
-initDb();
+
+// Inicializar datos por defecto
+initializeDefaultData();
 
 // Endpoints
 
 // GET /api/configuracion
 app.get('/api/configuracion', async (req, res) => {
-  const row = await db.get('SELECT inscripciones_habilitadas FROM configuracion WHERE id = 1');
-  res.json({ inscripciones_habilitadas: !!row.inscripciones_habilitadas });
+  try {
+    const { data, error } = await supabase
+      .from('configuracion')
+      .select('inscripciones_habilitadas')
+      .eq('id', 1)
+      .single();
+    
+    if (error) {
+      console.error('Error obteniendo configuración:', error);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+    
+    res.json({ inscripciones_habilitadas: !!data?.inscripciones_habilitadas });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
 });
 
 // PUT /api/configuracion
 app.put('/api/configuracion', async (req, res) => {
-  const estado = req.body.inscripciones_habilitadas ? 1 : 0;
-  await db.run('UPDATE configuracion SET inscripciones_habilitadas = ? WHERE id = 1', estado);
-  res.json({ success: true });
+  try {
+    const { error } = await supabase
+      .from('configuracion')
+      .update({ inscripciones_habilitadas: !!req.body.inscripciones_habilitadas })
+      .eq('id', 1);
+    
+    if (error) {
+      console.error('Error actualizando configuración:', error);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
 });
 
 // GET /api/estadisticas
 app.get('/api/estadisticas', async (req, res) => {
-  const masivos = await db.all('SELECT * FROM masivos WHERE activo = 1');
-  const stats = [];
-
-  for (const masivo of masivos) {
-    const inscritos = await db.get('SELECT COUNT(*) as count FROM inscripciones WHERE masivo_id = ?', masivo.id);
-    stats.push({
-      masivo_id: masivo.id,
-      nombre: masivo.nombre,
-      dia: masivo.dia,
-      horario: masivo.horario,
-      cupo_maximo: masivo.cupo_maximo,
-      inscritos: inscritos.count,
-      disponibles: masivo.cupo_maximo - inscritos.count
-    });
+  try {
+    // Obtener masivos activos
+    const { data: masivos, error: masivoError } = await supabase
+      .from('masivos')
+      .select('*')
+      .eq('activo', true);
+    
+    if (masivoError) {
+      console.error('Error obteniendo masivos:', masivoError);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+    
+    const stats = [];
+    
+    for (const masivo of masivos) {
+      // Contar inscripciones para cada masivo
+      const { count, error: countError } = await supabase
+        .from('inscripciones')
+        .select('*', { count: 'exact', head: true })
+        .eq('masivo_id', masivo.id);
+      
+      if (countError) {
+        console.error('Error contando inscripciones:', countError);
+        continue;
+      }
+      
+      stats.push({
+        masivo_id: masivo.id,
+        nombre: masivo.nombre,
+        dia: masivo.dia,
+        horario: masivo.horario,
+        cupo_maximo: masivo.cupo_maximo,
+        inscritos: count || 0,
+        disponibles: masivo.cupo_maximo - (count || 0)
+      });
+    }
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
-
-  res.json(stats);
 });
 
 // POST /api/inscribir
 app.post('/api/inscribir', async (req, res) => {
-  const { nombreCompleto, cedula, grupoReducido, masivoSeleccionado } = req.body;
+  try {
+    const { nombreCompleto, cedula, grupoReducido, masivoSeleccionado } = req.body;
 
-  // Validaciones
-  if (!nombreCompleto || !cedula || !grupoReducido || !masivoSeleccionado) {
-    return res.json({ success: false, error: 'Todos los campos son obligatorios' });
-  }
-  if (!/^\d{8}$/.test(cedula)) {
-    return res.json({ success: false, error: 'Cédula debe tener 8 dígitos' });
-  }
+    // Validaciones
+    if (!nombreCompleto || !cedula || !grupoReducido || !masivoSeleccionado) {
+      return res.json({ success: false, error: 'Todos los campos son obligatorios' });
+    }
+    if (!/^\d{8}$/.test(cedula)) {
+      return res.json({ success: false, error: 'Cédula debe tener 8 dígitos' });
+    }
 
-  // Verifica configuracion
-  const config = await db.get('SELECT inscripciones_habilitadas FROM configuracion WHERE id = 1');
-  if (!config.inscripciones_habilitadas) {
-    return res.json({ success: false, error: 'Inscripciones cerradas' });
-  }
+    // Verificar configuración
+    const { data: config, error: configError } = await supabase
+      .from('configuracion')
+      .select('inscripciones_habilitadas')
+      .eq('id', 1)
+      .single();
+    
+    if (configError || !config?.inscripciones_habilitadas) {
+      return res.json({ success: false, error: 'Inscripciones cerradas' });
+    }
 
-  // Verifica duplicados
-  const existe = await db.get('SELECT * FROM inscripciones WHERE cedula = ?', cedula);
-  if (existe) {
-    return res.json({ success: false, error: 'Ya está inscripto' });
-  }
+    // Verificar duplicados
+    const { data: existeInscripcion } = await supabase
+      .from('inscripciones')
+      .select('*')
+      .eq('cedula', cedula)
+      .single();
+    
+    if (existeInscripcion) {
+      return res.json({ success: false, error: 'Ya está inscripto' });
+    }
 
-  // Verifica cupo
-  const cupo = await db.get('SELECT COUNT(*) as count FROM inscripciones WHERE masivo_id = ?', masivoSeleccionado);
-  const masivo = await db.get('SELECT * FROM masivos WHERE id = ?', masivoSeleccionado);
-  if (cupo.count >= masivo.cupo_maximo) {
-    return res.json({ success: false, error: 'Cupo completo' });
-  }
+    // Verificar cupo
+    const { count: inscriptosActuales } = await supabase
+      .from('inscripciones')
+      .select('*', { count: 'exact', head: true })
+      .eq('masivo_id', masivoSeleccionado);
+    
+    const { data: masivo, error: masivoError } = await supabase
+      .from('masivos')
+      .select('cupo_maximo')
+      .eq('id', masivoSeleccionado)
+      .single();
+    
+    if (masivoError || !masivo) {
+      return res.json({ success: false, error: 'Masivo no encontrado' });
+    }
+    
+    if ((inscriptosActuales || 0) >= masivo.cupo_maximo) {
+      return res.json({ success: false, error: 'Cupo completo' });
+    }
 
-  // Inserta inscripción
-  await db.run(
-    'INSERT INTO inscripciones (nombre_completo, cedula, grupo_reducido, masivo_id, created_at) VALUES (?, ?, ?, ?, ?)',
-    nombreCompleto, cedula, grupoReducido, masivoSeleccionado, new Date().toISOString()
-  );
-  res.json({ success: true, message: 'Inscripción exitosa' });
+    // Insertar inscripción
+    const { error: insertError } = await supabase
+      .from('inscripciones')
+      .insert({
+        nombre_completo: nombreCompleto,
+        cedula: cedula,
+        grupo_reducido: grupoReducido,
+        masivo_id: masivoSeleccionado,
+        created_at: new Date().toISOString()
+      });
+    
+    if (insertError) {
+      console.error('Error insertando inscripción:', insertError);
+      return res.json({ success: false, error: 'Error al procesar inscripción' });
+    }
+    
+    res.json({ success: true, message: 'Inscripción exitosa' });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
 });
 
 app.get('/api/descargar-excel', async (req, res) => {
   try {
     console.log('=== INICIO DESCARGA EXCEL ===');
     
-    const inscripciones = await db.all(`
-      SELECT i.*, m.nombre as masivo_nombre, m.dia, m.horario
-      FROM inscripciones i
-      JOIN masivos m ON i.masivo_id = m.id
-      ORDER BY m.nombre, i.created_at ASC
-    `);
-
-    console.log(`Inscripciones encontradas: ${inscripciones.length}`);
+    // Obtener inscripciones con datos del masivo
+    const { data: inscripciones, error } = await supabase
+      .from('inscripciones')
+      .select(`
+        *,
+        masivos:masivo_id (
+          nombre,
+          dia,
+          horario
+        )
+      `)
+      .order('created_at', { ascending: true });
     
-    if (inscripciones.length === 0) {
+    if (error) {
+      console.error('Error obteniendo inscripciones:', error);
+      return res.status(500).json({ error: 'Error obteniendo datos' });
+    }
+
+    console.log(`Inscripciones encontradas: ${inscripciones?.length || 0}`);
+    
+    if (!inscripciones || inscripciones.length === 0) {
       console.log('No hay inscripciones, devolviendo error 404');
       return res.status(404).json({ error: 'No hay inscripciones para exportar' });
     }
@@ -155,7 +272,7 @@ app.get('/api/descargar-excel', async (req, res) => {
 
     // Agrupar por masivos
     const gruposPorMasivo = inscripciones.reduce((acc, ins) => {
-      const masivo = ins.masivo_nombre;
+      const masivo = ins.masivos?.nombre || 'Sin masivo';
       if (!acc[masivo]) {
         acc[masivo] = [];
       }
@@ -165,10 +282,6 @@ app.get('/api/descargar-excel', async (req, res) => {
 
     console.log(`Grupos de masivos creados: ${Object.keys(gruposPorMasivo).length}`);
     console.log('Nombres de masivos:', Object.keys(gruposPorMasivo));
-
-    // Verificar que XLSX esté disponible
-    console.log('XLSX disponible:', typeof XLSX !== 'undefined');
-    console.log('XLSX.utils disponible:', typeof XLSX.utils !== 'undefined');
 
     // Crear libro de Excel
     const workbook = XLSX.utils.book_new();
@@ -183,7 +296,11 @@ app.get('/api/descargar-excel', async (req, res) => {
       
       // Título del grupo
       sheetData.push([`=== ${masivo.toUpperCase()} ===`]);
-      sheetData.push([`Día: ${gruposPorMasivo[masivo][0].dia}`, `Horario: ${gruposPorMasivo[masivo][0].horario}`]);
+      const primerInscripcion = gruposPorMasivo[masivo][0];
+      sheetData.push([
+        `Día: ${primerInscripcion.masivos?.dia || 'No definido'}`, 
+        `Horario: ${primerInscripcion.masivos?.horario || 'No definido'}`
+      ]);
       sheetData.push([]); // Fila vacía
       
       // Encabezados
@@ -276,7 +393,6 @@ app.get('/api/test-download', (req, res) => {
 });
 
 // OPCIONAL: Mantener compatibilidad con el endpoint anterior
-// Puedes redirigir el CSV al Excel o mantener ambos
 app.get('/api/descargar-csv', async (req, res) => {
   // Redirigir al nuevo endpoint de Excel
   req.url = '/api/descargar-excel';
@@ -285,11 +401,25 @@ app.get('/api/descargar-csv', async (req, res) => {
 
 // Borrar todas las inscripciones (opcional, admin)
 app.delete('/api/inscripciones', async (req, res) => {
-  await db.run('DELETE FROM inscripciones');
-  res.json({ success: true, message: 'Todas las inscripciones eliminadas' });
+  try {
+    const { error } = await supabase
+      .from('inscripciones')
+      .delete()
+      .neq('id', 0); // Elimina todos los registros
+    
+    if (error) {
+      console.error('Error eliminando inscripciones:', error);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+    
+    res.json({ success: true, message: 'Todas las inscripciones eliminadas' });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
 });
 
 // Inicia el servidor
 app.listen(PORT, () => {
-  console.log(`Backend corriendo en http://localhost:${PORT}`);
+  console.log(`Backend corriendo en http://localhost:${PORT} con Supabase`);
 });
