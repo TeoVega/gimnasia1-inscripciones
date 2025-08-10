@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import fs from 'fs/promises';
+import XLSX from 'xlsx';
 
 dotenv.config();
 
@@ -13,7 +14,7 @@ const DB_PATH = process.env.DB_PATH || './db.sqlite';
 const app = express();
 app.use(cors());
 app.use(express.json());
-import XLSX from 'xlsx';
+
 
 // Inicializa la base de datos
 let db;
