@@ -4,8 +4,9 @@ import {
   inscribirEstudiante as apiInscribirEstudiante,
   obtenerConfiguracion,
   actualizarConfiguracion,
-  exportarCSV as apiExportarCSV,
+  exportarExcel as apiExportarExcel, // Cambiar nombre
 } from "../api";
+
 
 const useInscripciones = () => {
   const [estadisticas, setEstadisticas] = useState([]);
@@ -33,9 +34,9 @@ const useInscripciones = () => {
     return data;
   };
 
-  const exportarCSV = async () => {
-    return await apiExportarCSV();
-  };
+ const exportarExcel = async () => {
+  return await apiExportarExcel();
+};
 
   useEffect(() => {
     cargarEstadisticas();
@@ -48,17 +49,17 @@ const useInscripciones = () => {
     return () => clearInterval(interval);
   }, []);
 
-  return {
-    estadisticas,
-    configuracion,
-    loading,
-    inscribirEstudiante,
-    toggleInscripciones,
-    exportarCSV,
-    recargarDatos: () => {
-      cargarEstadisticas();
-      cargarConfiguracion();
-    },
+ return {
+  estadisticas,
+  configuracion,
+  loading,
+  inscribirEstudiante,
+  toggleInscripciones,
+  exportarExcel, // Cambiar nombre
+  recargarDatos: () => {
+    cargarEstadisticas();
+    cargarConfiguracion();
+  },
   };
 };
 
