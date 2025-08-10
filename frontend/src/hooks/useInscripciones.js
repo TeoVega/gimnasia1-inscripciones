@@ -40,7 +40,7 @@ const useInscripciones = () => {
   useEffect(() => {
     cargarEstadisticas();
     cargarConfiguracion();
-    // Opcional: polling para multiusuario cada 10 segundos
+    // Polling cada 10 segundos para multiusuario
     const interval = setInterval(() => {
       cargarEstadisticas();
       cargarConfiguracion();
