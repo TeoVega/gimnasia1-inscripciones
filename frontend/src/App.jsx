@@ -4,7 +4,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import DownloadIcon from '@mui/icons-material/Download';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API = "https://gimnasia1-inscripciones.onrender.com/api";
 
 function App() {
   const [groups, setGroups] = useState([]);
