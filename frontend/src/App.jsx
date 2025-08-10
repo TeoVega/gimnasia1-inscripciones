@@ -173,7 +173,7 @@ const App = () => {
               <Users className="mr-2" size={20} />
               Formulario de Inscripción
             </h2>
-            <p className="text-gray-600">Todos los espacios de masivos serán en Malvin Norte</p>
+         
 
             {!configuracion.inscripciones_habilitadas && (
               <div className="mb-4 p-3 rounded-lg bg-yellow-100 text-yellow-800 flex items-center">
@@ -198,6 +198,7 @@ const App = () => {
 
             <div className="space-y-4">
               <div>
+                <p className="text-gray-600">Todos los espacios de masivos serán en Malvin Norte</p>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre Completo *
                 </label>
