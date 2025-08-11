@@ -160,7 +160,7 @@ app.get('/api/estadisticas', async (req, res) => {
   }
 });
 
-// POST /api/inscribir
+// POST /api/inscribir - VERSIÓN ACTUALIZADA
 app.post('/api/inscribir', async (req, res) => {
   try {
     const { nombre, apellido, cedula, grupoReducido, masivoSeleccionado } = req.body;
@@ -215,12 +215,13 @@ app.post('/api/inscribir', async (req, res) => {
       return res.json({ success: false, error: 'Cupo completo' });
     }
 
-    // Insertar inscripción
+    // Insertar inscripción - INCLUIR NOMBRE_COMPLETO PARA COMPATIBILIDAD
     const { error: insertError } = await supabase
       .from('inscripciones')
       .insert({
         nombre: nombre,
         apellido: apellido,
+        nombre_completo: `${nombre} ${apellido}`, // ← AGREGAR ESTA LÍNEA
         cedula: cedula,
         grupo_reducido: grupoReducido,
         masivo_id: masivoSeleccionado,
