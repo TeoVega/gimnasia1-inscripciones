@@ -255,7 +255,7 @@ const App = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Grupo Reducido *
+                  Numero de Reducido *
                 </label>
                 <input
                   type="text"
@@ -264,7 +264,7 @@ const App = () => {
                   onChange={handleInputChange}
                   disabled={submitting}
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                  placeholder="Ej: Grupo A, Grupo 1, etc."
+                  placeholder="Ej: 1, 2, 3, etc."
                 />
               </div>
 
