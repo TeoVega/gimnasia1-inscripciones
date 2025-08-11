@@ -306,12 +306,13 @@ app.get('/api/descargar-excel', async (req, res) => {
       sheetData.push([]); // Fila vacía
       
       // Encabezados
-      sheetData.push(['Nombre Completo', 'Cédula', 'Grupo Reducido']);
+      sheetData.push(['Nombre', 'Apellido', 'Cédula', 'Grupo Reducido']);
       
       // Datos
       gruposPorMasivo[masivo].forEach(ins => {
         sheetData.push([
-          `${ins.nombre} ${ins.apellido}`, // Concatenar nombre y apellido
+          ins.nombre, 
+          ins.apellido,
           ins.cedula, 
           ins.grupo_reducido
         ]);
