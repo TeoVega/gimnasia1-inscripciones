@@ -14,7 +14,8 @@ export const obtenerEstadisticas = async () => {
 export const inscribirEstudiante = async (formData) => {
   try {
     const res = await axios.post(`${API_BASE}/inscribir`, {
-      nombreCompleto: formData.nombreCompleto,
+      nombre: formData.nombre,
+      apellido: formData.apellido,
       cedula: formData.cedula,
       grupoReducido: formData.grupoReducido,
       masivoSeleccionado: parseInt(formData.masivoSeleccionado)
