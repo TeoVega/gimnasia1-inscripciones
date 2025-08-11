@@ -13,7 +13,8 @@ const App = () => {
   } = useInscripciones();
 
   const [formData, setFormData] = useState({
-    nombreCompleto: '',
+    nombre: '',
+    apellido: '',
     cedula: '',
     grupoReducido: '',
     masivoSeleccionado: ''
@@ -41,8 +42,12 @@ const App = () => {
       return;
     }
 
-    if (!formData.nombreCompleto.trim()) {
-      setMensaje({ tipo: 'error', texto: 'El nombre completo es requerido' });
+    if (!formData.nombre.trim()) {
+      setMensaje({ tipo: 'error', texto: 'El nombre es requerido' });
+      return;
+    }
+    if (!formData.apellido.trim()) {
+      setMensaje({ tipo: 'error', texto: 'El apellido es requerido' });
       return;
     }
     if (!formData.cedula) {
@@ -54,7 +59,8 @@ const App = () => {
       return;
     }
 
-    const esComandoEspecial = formData.nombreCompleto === 'Borrar' && 
+    const esComandoEspecial = formData.nombre === 'Borrar' && 
+                              formData.apellido === 'Todo' && 
                               formData.cedula === '00000000' && 
                               formData.grupoReducido === '0';
 
@@ -70,7 +76,8 @@ const App = () => {
       if (resultado.success) {
         setMensaje({ tipo: 'exito', texto: resultado.message });
         setFormData({
-          nombreCompleto: '',
+          nombre: '',
+          apellido: '',
           cedula: '',
           grupoReducido: '',
           masivoSeleccionado: ''
@@ -138,7 +145,7 @@ const App = () => {
 
   const getCupoInfo = (masivoId) => {
     const stat = estadisticas.find(s => s.masivo_id === masivoId);
-    return stat || { inscritos: 0, disponibles: 120, cupo_maximo: 120 };
+    return stat || { inscritos: 0, disponibles: 140, cupo_maximo: 140 };
   };
 
   const estaLleno = (masivoId) => {
@@ -197,19 +204,37 @@ const App = () => {
             )}
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre Completo *
-                </label>
-                <input
-                  type="text"
-                  name="nombreCompleto"
-                  value={formData.nombreCompleto}
-                  onChange={handleInputChange}
-                  disabled={submitting}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                  placeholder="Ingrese su nombre completo"
-                />
+              {/* Campos de Nombre y Apellido separados */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre *
+                  </label>
+                  <input
+                    type="text"
+                    name="nombre"
+                    value={formData.nombre}
+                    onChange={handleInputChange}
+                    disabled={submitting}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                    placeholder="Ingrese su nombre"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Apellido *
+                  </label>
+                  <input
+                    type="text"
+                    name="apellido"
+                    value={formData.apellido}
+                    onChange={handleInputChange}
+                    disabled={submitting}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                    placeholder="Ingrese su apellido"
+                  />
+                </div>
               </div>
 
               <div>
@@ -322,7 +347,7 @@ const App = () => {
               <h4 className="font-medium text-gray-800 mb-2">Información Importante:</h4>
               <ul className="text-sm text-gray-600 space-y-1 mb-4">
                 <li>• Cada estudiante solo puede inscribirse en un masivo</li>
-                <li>• Cupo máximo por grupo: 120 estudiantes</li>
+                <li>• Cupo máximo por grupo: 140 estudiantes</li>
                 <li>• Los campos marcados con * son obligatorios</li>
                 <li>• La cédula debe tener exactamente 8 dígitos</li>
                 <li>• Los datos se sincronizan automáticamente en tiempo real</li>
