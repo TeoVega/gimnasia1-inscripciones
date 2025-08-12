@@ -258,8 +258,8 @@ const App = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Numero de Reducido *
                 </label>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Si cambia de correspondencia con el Masivo, justifique la razón.
+                 <label className="block text-sm font-medium text-gray-500 mb-1">
+                  Si cambia de correspondencia con el Masivo asignado, explique la razón aqui
                 </label>
                 <input
                   type="text"
