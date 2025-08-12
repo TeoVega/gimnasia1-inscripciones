@@ -241,9 +241,7 @@ const App = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Cédula de Identidad *
                 </label>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Si cambia de correspondencia con el Masivo, justifique la razón.
-                </label>
+               
                 <input
                   type="text"
                   name="cedula"
@@ -259,6 +257,9 @@ const App = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Numero de Reducido *
+                </label>
+                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Si cambia de correspondencia con el Masivo, justifique la razón.
                 </label>
                 <input
                   type="text"
